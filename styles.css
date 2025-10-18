@@ -332,7 +332,6 @@ li:hover {
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
-    margin-top: 1rem;
 }
 
 #admin-btn:hover {
