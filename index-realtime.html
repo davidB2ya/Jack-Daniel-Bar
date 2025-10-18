@@ -7,16 +7,15 @@
         rel="stylesheet">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cocteleria - Pedidos en Tiempo Real</title>
+    <title>Cocteleria - Sistema de Pedidos en Tiempo Real</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍹</text></svg>">
 </head>
 
 <body>
     <header class="cabecera">
-        <h1>🍹 Cocktails</h1>
-        <button id="admin-btn" title="Ver pedidos (superadmin)" style="margin-top:10px;">📋 Admin</button>
-        <div id="connection-status" class="connection-status connection-offline">🔴 Desconectado</div>
+        <h1>Cocktails</h1>
+        <button id="admin-btn" title="Ver pedidos (superadmin)" style="margin-top:10px;">Admin</button>
+        <div id="connection-status" class="connection-status connection-offline">Conectando...</div>
     </header>
     <main class="cocteles">
         <section class="mojito">
@@ -69,6 +68,7 @@
             <span>Ron blanco, limon, blue curacao, sprite</span>
         </section>
     </main>
+    
     <!-- Panel Superadmin Mejorado -->
     <aside id="admin-panel" class="admin-panel" aria-hidden="true">
         <div class="admin-header">
@@ -84,8 +84,11 @@
             <span id="pending-orders">Pendientes: 0</span>
             <span id="ready-orders">Listos: 0</span>
         </div>
-        <div id="orders-list"></div>
+        <div id="orders-list">
+            <p>Cargando pedidos...</p>
+        </div>
     </aside>
+    
     <footer class="cervezas">
         <h2>Bebidas</h2>
         <ul class="coronas">            
@@ -96,8 +99,7 @@
             <p>Blue hawaiian Corona</p>
             <img src="https://static.vecteezy.com/system/resources/previews/037/751/355/non_2x/corona-extra-beer-bottle-isolated-on-a-transparent-background-free-png.png"
                 alt="auto" height="200px" class="corona">
-                            <p>Cerveza Corona</p>
-
+            <p>Cerveza Corona</p>
         </ul>
         <h2 class="cacorros">Sin licor</h2>
         <ul>
@@ -105,6 +107,7 @@
             <li>Piña colada</li>
         </ul>
     </footer>
+
     <!-- Formulario de pedido mejorado -->
     <section id="order-section" class="order-section">
         <h2>🍹 Realizar pedido</h2>
@@ -125,11 +128,11 @@
         <div id="order-msg" aria-live="polite"></div>
     </section>
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <!-- Socket.io cliente -->
+    <script src="/socket.io/socket.io.js"></script>
     
-    <script src="scripts.js"></script>
+    <!-- Script principal para tiempo real -->
+    <script src="scripts-realtime.js"></script>
 </body>
 
 </html>
