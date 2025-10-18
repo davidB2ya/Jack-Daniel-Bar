@@ -15,8 +15,7 @@
 <body>
     <header class="cabecera">
         <h1>🍹 Cocktails</h1>
-        <button id="admin-btn" title="Ver pedidos (superadmin)" style="margin-top:10px;">📋 Admin</button>
-        <div id="connection-status" class="connection-status connection-offline">🔴 Desconectado</div>
+        <button id="admin-btn" title="Ver pedidos (superadmin)">📋 Admin</button>
     </header>
     <main class="cocteles">
         <section class="mojito">
@@ -72,12 +71,12 @@
     <!-- Panel Superadmin Mejorado -->
     <aside id="admin-panel" class="admin-panel" aria-hidden="true">
         <div class="admin-header">
-            <h2>📋 Pedidos en Tiempo Real</h2>
-            <div class="admin-controls">
-                <button id="admin-close">❌ Cerrar</button>
-                <button id="clear-orders">🗑️ Borrar todos</button>
-                <button id="export-orders">📄 Exportar</button>
-            </div>
+            <h2>📋 Pedidos</h2>
+            <div id="connection-status" class="connection-status-admin">🔴</div>
+        </div>
+        <div class="admin-controls">
+            <button id="admin-close">❌ Cerrar</button>
+            <button id="clear-orders">🗑️ Limpiar</button>
         </div>
         <div class="order-stats">
             <span id="total-orders">Total: 0</span>
