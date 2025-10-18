@@ -121,10 +121,22 @@
         });
     }
 
+    // Generar código de seguimiento único
+    function generateTrackingCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Sin 0, O, I, 1 para evitar confusión
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return code;
+    }
+
     // Gestión de pedidos
-    async function addOrder(name, cocktail, notes = '') {
+    async function addOrderAndGetCode(name, cocktail, notes = '') {
+        const trackingCode = generateTrackingCode();
         const order = {
             id: Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+            trackingCode: trackingCode,
             name: name.trim(),
             cocktail: cocktail.trim(),
             notes: notes.trim(),
@@ -136,7 +148,7 @@
         if (isFirebaseConnected && ordersRef) {
             try {
                 await ordersRef.push(order);
-                console.log('✅ Pedido enviado a Firebase');
+                console.log('✅ Pedido enviado a Firebase - Código:', trackingCode);
             } catch (error) {
                 console.error('❌ Error enviando pedido:', error);
                 throw error;
@@ -146,8 +158,10 @@
             const orders = getLocalOrders();
             orders.push(order);
             saveLocalOrders(orders);
-            console.log('📱 Pedido guardado localmente');
+            console.log('📱 Pedido guardado localmente - Código:', trackingCode);
         }
+
+        return trackingCode;
     }
 
     function updateOrderStatus(orderId, newStatus) {
@@ -216,6 +230,15 @@
 
         const notesHtml = order.notes ?
             `<div class="order-notes">📝 ${escapeHtml(order.notes)}</div>` : '';
+        
+        const trackingCodeHtml = order.trackingCode ?
+            `<div class="order-tracking-code">
+                <span class="tracking-label">🔍 Código de Seguimiento:</span>
+                <span class="tracking-code-value" id="tracking-${order.id}">#${order.trackingCode}</span>
+                <button class="copy-code-btn" data-code="${order.trackingCode}" data-order-id="${order.id}" title="Copiar código">
+                    📋
+                </button>
+            </div>` : '';
 
         div.innerHTML = `
             <div class="order-header">
@@ -225,6 +248,7 @@
                 </span>
             </div>
             <small>👤 ${escapeHtml(order.name)} • 🕐 ${new Date(order.timestamp).toLocaleString()}</small>
+            ${trackingCodeHtml}
             ${notesHtml}
             <div class="order-actions">
                 <select class="status-select" data-order-id="${order.id}">
@@ -249,6 +273,34 @@
                 deleteOrder(order.id);
             }
         });
+
+        // Event listener para copiar código
+        const copyBtn = div.querySelector('.copy-code-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', (e) => {
+                const code = e.target.dataset.code;
+                const orderId = e.target.dataset.orderId;
+                
+                // Copiar al portapapeles
+                navigator.clipboard.writeText(`#${code}`).then(() => {
+                    // Cambiar temporalmente el icono a checkmark
+                    e.target.textContent = '✅';
+                    e.target.style.background = '#4caf50';
+                    
+                    // Mostrar notificación
+                    showNotification(`Código #${code} copiado al portapapeles`, 'success');
+                    
+                    // Restaurar el icono después de 2 segundos
+                    setTimeout(() => {
+                        e.target.textContent = '📋';
+                        e.target.style.background = '';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Error al copiar:', err);
+                    showNotification('Error al copiar código', 'error');
+                });
+            });
+        }
 
         return div;
     }
@@ -292,6 +344,176 @@
         if (totalEl) totalEl.textContent = `Total: ${stats.total}`;
         if (pendingEl) pendingEl.textContent = `Pendientes: ${stats.pendiente}`;
         if (readyEl) readyEl.textContent = `Listos: ${stats.listo}`;
+    }
+
+    // Sistema de seguimiento de pedidos para clientes
+    function findOrderByTrackingCode(code) {
+        return new Promise((resolve) => {
+            if (isFirebaseConnected && ordersRef) {
+                ordersRef.once('value', (snapshot) => {
+                    let foundOrder = null;
+                    snapshot.forEach((childSnapshot) => {
+                        const order = childSnapshot.val();
+                        if (order.trackingCode === code.toUpperCase()) {
+                            foundOrder = order;
+                        }
+                    });
+                    resolve(foundOrder);
+                });
+            } else {
+                const orders = getLocalOrders();
+                const foundOrder = orders.find(o => o.trackingCode === code.toUpperCase());
+                resolve(foundOrder || null);
+            }
+        });
+    }
+
+    function showTrackingModal(trackingCode) {
+        // Crear modal si no existe
+        let modal = qs('#tracking-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'tracking-modal';
+            modal.className = 'tracking-modal';
+            modal.innerHTML = `
+                <div class="tracking-content">
+                    <div class="tracking-header">
+                        <h2>🍹 Seguimiento de Pedido</h2>
+                        <button id="tracking-close" class="tracking-close">✕</button>
+                    </div>
+                    <div id="tracking-body" class="tracking-body">
+                        <div class="tracking-loading">Buscando pedido...</div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Event listener para cerrar
+            qs('#tracking-close', modal).addEventListener('click', () => {
+                modal.style.display = 'none';
+                // Detener listeners
+                if (modal.dataset.orderListenerPath) {
+                    const ref = database.ref(modal.dataset.orderListenerPath);
+                    ref.off('value');
+                }
+            });
+
+            // Cerrar al hacer click fuera del modal
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    qs('#tracking-close', modal).click();
+                }
+            });
+        }
+
+        // Mostrar modal
+        modal.style.display = 'flex';
+
+        // Buscar y mostrar pedido
+        findOrderByTrackingCode(trackingCode).then(order => {
+            if (!order) {
+                qs('#tracking-body', modal).innerHTML = `
+                    <div class="tracking-error">
+                        <p>❌ No se encontró un pedido con el código <strong>#${trackingCode}</strong></p>
+                        <p>Verifica que el código sea correcto.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            renderTrackingOrder(order, modal);
+
+            // Configurar listener en tiempo real para este pedido
+            if (isFirebaseConnected && ordersRef) {
+                ordersRef.once('value', (snapshot) => {
+                    snapshot.forEach((childSnapshot) => {
+                        const orderData = childSnapshot.val();
+                        if (orderData.trackingCode === trackingCode.toUpperCase()) {
+                            const orderPath = childSnapshot.ref.toString().replace(database.ref().toString(), '');
+                            modal.dataset.orderListenerPath = orderPath;
+
+                            // Escuchar cambios en tiempo real
+                            childSnapshot.ref.on('value', (snap) => {
+                                const updatedOrder = snap.val();
+                                if (updatedOrder) {
+                                    renderTrackingOrder(updatedOrder, modal);
+                                }
+                            });
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    function renderTrackingOrder(order, modal) {
+        const statusInfo = {
+            'pendiente': { icon: '📋', text: 'Pedido Recibido', color: '#ff9800', step: 1 },
+            'preparando': { icon: '👨‍🍳', text: 'En Preparación', color: '#2196f3', step: 2 },
+            'listo': { icon: '✅', text: 'Listo para Recoger', color: '#4caf50', step: 3 },
+            'entregado': { icon: '🎉', text: 'Entregado', color: '#9e9e9e', step: 4 }
+        };
+
+        const currentStatus = statusInfo[order.status];
+        const currentStep = currentStatus.step;
+
+        const notesHtml = order.notes ? 
+            `<div class="tracking-notes">📝 <em>${escapeHtml(order.notes)}</em></div>` : '';
+
+        qs('#tracking-body', modal).innerHTML = `
+            <div class="tracking-code">
+                <span>Código: <strong>#${order.trackingCode}</strong></span>
+                <button class="copy-code-btn" onclick="navigator.clipboard.writeText('${order.trackingCode}').then(() => alert('✅ Código copiado'))">
+                    📋 Copiar
+                </button>
+            </div>
+
+            <div class="tracking-order-info">
+                <h3>🍹 ${escapeHtml(order.cocktail)}</h3>
+                <p>👤 ${escapeHtml(order.name)}</p>
+                ${notesHtml}
+            </div>
+
+            <div class="tracking-progress">
+                <div class="progress-step ${currentStep >= 1 ? 'completed' : ''}">
+                    <div class="step-icon">${statusInfo.pendiente.icon}</div>
+                    <div class="step-text">${statusInfo.pendiente.text}</div>
+                </div>
+                <div class="progress-line ${currentStep >= 2 ? 'completed' : ''}"></div>
+                
+                <div class="progress-step ${currentStep >= 2 ? 'completed' : ''} ${currentStep === 2 ? 'active' : ''}">
+                    <div class="step-icon">${statusInfo.preparando.icon}</div>
+                    <div class="step-text">${statusInfo.preparando.text}</div>
+                </div>
+                <div class="progress-line ${currentStep >= 3 ? 'completed' : ''}"></div>
+                
+                <div class="progress-step ${currentStep >= 3 ? 'completed' : ''} ${currentStep === 3 ? 'active' : ''}">
+                    <div class="step-icon">${statusInfo.listo.icon}</div>
+                    <div class="step-text">${statusInfo.listo.text}</div>
+                </div>
+                <div class="progress-line ${currentStep >= 4 ? 'completed' : ''}"></div>
+                
+                <div class="progress-step ${currentStep >= 4 ? 'completed' : ''}">
+                    <div class="step-icon">${statusInfo.entregado.icon}</div>
+                    <div class="step-text">${statusInfo.entregado.text}</div>
+                </div>
+            </div>
+
+            <div class="tracking-current-status" style="background: ${currentStatus.color}">
+                ${currentStatus.icon} ${currentStatus.text}
+            </div>
+
+            <div class="tracking-time">
+                <small>⏰ Pedido realizado: ${new Date(order.timestamp).toLocaleString()}</small>
+            </div>
+        `;
+    }
+
+    function openTrackingSearch() {
+        const code = prompt('🔍 Ingresa tu código de seguimiento:');
+        if (code && code.trim()) {
+            showTrackingModal(code.trim());
+        }
     }
 
     // Notificaciones
@@ -457,15 +679,25 @@
                 }
 
                 try {
-                    await addOrder(name, cocktail, notes);
-                    qs('#order-msg').textContent = '✅ ¡Pedido enviado correctamente!';
+                    const trackingCode = await addOrderAndGetCode(name, cocktail, notes);
+                    
+                    // Mostrar mensaje de éxito con código
+                    qs('#order-msg').innerHTML = `
+                        ✅ ¡Pedido enviado!<br>
+                        <strong>Código de seguimiento: #${trackingCode}</strong>
+                    `;
                     qs('#order-msg').style.color = '#4caf50';
                     form.reset();
 
+                    // Abrir modal de seguimiento automáticamente
                     setTimeout(() => {
-                        qs('#order-msg').textContent = '';
+                        showTrackingModal(trackingCode);
+                    }, 1500);
+
+                    setTimeout(() => {
+                        qs('#order-msg').innerHTML = '';
                         qs('#order-msg').style.color = '';
-                    }, 3000);
+                    }, 5000);
 
                 } catch (error) {
                     qs('#order-msg').textContent = '❌ Error enviando pedido. Intenta de nuevo.';
@@ -477,6 +709,12 @@
                     }, 3000);
                 }
             });
+        }
+
+        // Configurar botón de rastrear pedido
+        const trackOrderBtn = qs('#track-order-btn');
+        if (trackOrderBtn) {
+            trackOrderBtn.addEventListener('click', openTrackingSearch);
         }
 
         // Configurar botones de admin
